@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "barium-watermarking"
+version = "0.1.0"
+description = "A detection tool for the open green-list scheme - not a SynthID tool"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Leiwe & Partners" }]
+keywords = ["watermarking", "llm", "detection", "green-list", "kirchenbauer"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Security",
+]
+# Zero runtime dependencies: the detector is a z-test over token counts, so the
+# stdlib covers everything. This is the local-first, no-hosting stance in code.
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+barium = "barium.cli:main"
+barium-mcp = "barium.mcp_server:main"
+
+[tool.setuptools]
+packages = ["barium"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
