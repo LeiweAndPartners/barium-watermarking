@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The MCP protocol — barium</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: Georgia, 'Times New Roman', serif; max-width: 46rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.6; }
+  code, pre, .mono { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+  pre { background: rgba(127,127,127,0.12); padding: 0.8rem 1rem; border-radius: 6px; overflow-x: auto; font-size: 0.85rem; }
+  .flow { display: flex; flex-direction: column; gap: 0.4rem; margin: 1rem 0; }
+  .msg { padding: 0.5rem 0.8rem; border-radius: 6px; border: 1px solid rgba(127,127,127,0.4); font-size: 0.85rem; }
+  .req { background: rgba(80,120,200,0.14); }
+  .res { background: rgba(48,164,108,0.16); margin-left: 2rem; }
+  .notif { background: rgba(200,160,80,0.14); }
+  .note { font-size: 0.9rem; color: rgba(127,127,127,0.95); }
+  a { color: inherit; }
+</style>
+</head>
+<body>
+<h1>The MCP protocol</h1>
+<p><a href="../../README.md">Back to the README</a> · <a href="https://modelcontextprotocol.io">The MCP specification</a> · <a href="https://arxiv.org/abs/2301.10226">The paper (arXiv:2301.10226 §2)</a></p>
+
+<p>Barium's MCP server speaks JSON-RPC 2.0 over stdio, implemented by hand on the Python standard library — no MCP SDK dependency. Requests are newline-delimited JSON objects in; responses are newline-delimited JSON objects out.</p>
+
+<p>A handshake and a tool call, with real messages:</p>
+
+<div class="flow">
+  <div class="msg req"><span class="mono">client → server</span><pre>{"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {"protocolVersion": "2024-11-05", "capabilities": {}, "clientInfo": {"name": "demo", "version": "0"}}}</pre></div>
+  <div class="msg res"><span class="mono">server → client</span><pre>{"jsonrpc": "2.0", "id": 1, "result": {"protocolVersion": "2024-11-05", "capabilities": {"tools": {}}, "serverInfo": {"name": "barium", "version": "0.1.0"}}}</pre></div>
+  <div class="msg notif"><span class="mono">client → server (notification, no reply)</span><pre>{"jsonrpc": "2.0", "method": "notifications/initialized", "params": {}}</pre></div>
+  <div class="msg req"><span class="mono">client → server</span><pre>{"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}}</pre></div>
+  <div class="msg res"><span class="mono">server → client</span><pre>{"jsonrpc": "2.0", "id": 2, "result": {"tools": [detect_watermark, generate_key, selftest]}}</pre></div>
+  <div class="msg req"><span class="mono">client → server</span><pre>{"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {"name": "detect_watermark", "arguments": {"text": "some text", "key": 123456789}}}</pre></div>
+  <div class="msg res"><span class="mono">server → client</span><pre>{"jsonrpc": "2.0", "id": 3, "result": {"content": [{"type": "text", "text": "{\"num_tokens_scored\": 6, ...}"}]}}</pre></div>
+</div>
+
+<p><strong>The three rules the implementation follows:</strong></p>
+<p>1. Every request carries an <span class="mono">id</span>; every response echoes it. A notification carries no <span class="mono">id</span> and gets no reply — per JSON-RPC 2.0 §4, the server must not answer a notification regardless of method.</p>
+<p>2. Unknown methods get error code −32601; unknown tools get −32602; unparseable lines get −32700.</p>
+<p>3. Tool errors come back as results with <span class="mono">isError: true</span>, not protocol errors — a bad argument is the caller's problem to read, not a broken session.</p>
+
+<p class="note">The three tools: <span class="mono">detect_watermark(text, key, z_threshold?)</span> scores text with the z-test (the z-score is a false-positive rate, not a certainty); <span class="mono">generate_key()</span> returns a fresh per-deployment key; <span class="mono">selftest()</span> runs the embed-then-detect round-trip with the reference demo embedder (a labelled demo, not production generation).</p>
+
+<p><strong>Point any MCP client at it:</strong> the command is <span class="mono">barium-mcp</span>, transport stdio. The server reads until stdin closes.</p>
+
+<script>
+// No interactivity needed: this page is a walkthrough. The protocol is
+// demonstrated with real request and response objects above.
+</script>
+</body>
+</html>

@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Key management — barium</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: Georgia, 'Times New Roman', serif; max-width: 46rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.6; }
+  code, pre, .mono { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+  pre { background: rgba(127,127,127,0.12); padding: 0.8rem 1rem; border-radius: 6px; overflow-x: auto; }
+  button { font: inherit; padding: 0.4rem 0.9rem; border-radius: 4px; border: 1px solid rgba(127,127,127,0.5); background: transparent; cursor: pointer; }
+  button:hover { background: rgba(127,127,127,0.15); }
+  .key { font-size: 1.2rem; margin: 1rem 0; }
+  .refused { color: rgba(200,80,80,0.95); font-weight: bold; }
+  .note { font-size: 0.9rem; color: rgba(127,127,127,0.95); }
+  a { color: inherit; }
+</style>
+</head>
+<body>
+<h1>Key management</h1>
+<p><a href="../../README.md">Back to the README</a> · <a href="https://arxiv.org/abs/2301.10226">The paper (arXiv:2301.10226 §2)</a> · <a href="threat-model.html">The threat model</a></p>
+
+<p>The key is the whole secret. The same key derives the green lists at generation and re-derives them at detection, so the key is the attack surface: if it leaks or is inferable, attackers spoof or evade.</p>
+
+<p>Barium draws keys from <span class="mono">secrets.randbits(31)</span>, giving a key space of 2³¹ ≈ 2.1×10⁹ values — large enough that accidental collision between deployments is negligible, small enough that keys stay readable in configuration. Key material comes from <span class="mono">secrets</span>, never <span class="mono">random</span>.</p>
+
+<p><strong>Known defaults are refused on both the emit and the accept path.</strong> The reference implementation ships a hardcoded hash key, 15485863 — a key that appears in a public repository is not a secret, and a split derived from it is predictable. Barium refuses to emit it and refuses to accept it.</p>
+
+<p>Try it: generate keys, and try the reference default.</p>
+<button id="gen">Generate a key</button>
+<div class="key" id="out">—</div>
+<button id="tryDefault">Try the reference default (15485863)</button>
+<div class="key" id="refused"></div>
+
+<p class="note">The key space is [1, 2³¹−1]. Zero is excluded so a key is always truthy and a missing key cannot masquerade as a valid one. The key is per-deployment secret material: the same key must be used at generation and detection, or the round-trip fails.</p>
+
+<p><strong>The trade-off:</strong> a public key means anyone can verify — and anyone can spoof. A private key means detection runs behind your own API — and third parties can no longer verify. Both modes are legitimate; the choice is yours. See the <a href="../../docs/threat-model.md">threat model</a> for the spoofing and evasion surface.</p>
+
+<script>
+(function () {
+  var REFERENCE_DEFAULT = 15485863;
+  function generateKey() {
+    // secrets.randbits(31) stand-in: crypto.getRandomValues with a redraw
+    // on the known default, matching the package's emit path.
+    var buf = new Uint32Array(1);
+    var key;
+    do {
+      crypto.getRandomValues(buf);
+      key = buf[0] & 0x7FFFFFFF;  // 31 bits
+    } while (key < 1 || key === REFERENCE_DEFAULT);
+    return key;
+  }
+  document.getElementById('gen').addEventListener('click', function () {
+    document.getElementById('out').textContent = generateKey();
+  });
+  document.getElementById('tryDefault').addEventListener('click', function () {
+    document.getElementById('refused').textContent =
+      'refused: 15485863 is a known default or shared key';
+  });
+  document.getElementById('out').textContent = generateKey();
+})();
+</script>
+</body>
+</html>
