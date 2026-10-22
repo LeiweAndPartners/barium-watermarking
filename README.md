@@ -1,12 +1,12 @@
 # barium-watermarking
 
-A standalone, local-first, zero-hosting detector for Kirchenbauer-style green-list LLM watermarks — a community companion to [Leiwe & Partners'](https://github.com/LeiweAndPartners) [EU AI Act watermarking series](https://leiwe.partners/insights/eu-ai-act-watermarking).
+A standalone, local-first, zero-hosting toolkit for Kirchenbauer-style green-list LLM watermark detection and reference embedding — a community companion to [Leiwe & Partners'](https://github.com/LeiweAndPartners) [EU AI Act watermarking series](https://leiwe.partners/insights/eu-ai-act-watermarking).
 
 **A detection tool for the open green-list scheme — not a SynthID tool.** It detects the watermark scheme Hugging Face ships as `WatermarkingConfig` (Kirchenbauer-style green lists), not SynthID Text, whose detector is a trained classifier tied to a private config. See [Related work](#related-work).
 
 ## Why
 
-Art 50(2) of the EU AI Act requires AI-generated text to be "marked in a machine-readable format and detectable as artificially generated or manipulated", with effectiveness weighed against "the costs of implementation". A builder using the open green-list scheme today has no standalone detector: the reference implementation is torch-dependent and research-grade. Detection is the deployable, zero-cost half of watermarking — the z-test needs no model access, so it runs anywhere. Barium makes it a one-command, dependency-free z-test.
+Art 50(2) of the EU AI Act requires AI-generated text to be "marked in a machine-readable format and detectable as artificially generated or manipulated", with effectiveness weighed against "the costs of implementation". A builder using the open green-list scheme today has no standalone detector: the reference implementation is torch-dependent and research-grade. Detection is the deployable, zero-cost half of watermarking — the z-test needs no model access, so it runs anywhere. Barium makes it a one-command, dependency-free z-test. The embedder is the other half, so the round-trip is provable without torch: a reference demo, not production generation.
 
 ## How detection works
 
@@ -20,7 +20,7 @@ where G is the green count and T the scored positions. The z-score is a **false-
 
 ## How embedding works
 
-Barium ships no language model, so embedding means supplying the candidate next-token probabilities yourself — from your own model, or from any distribution you want to watermark. The demo embedder implements the paper's soft rule: green candidates are boosted by δ = 2.0 before selection, and the highest-boosted candidate wins each position.
+Barium embeds a real Kirchenbauer-style watermark. The demo embedder implements the paper's soft rule: green candidates are boosted by δ = 2.0 before selection, and the highest-boosted candidate wins each position — the same bias the reference implementation applies to logits, applied over a candidate distribution instead. What barium does not ship is a language model: the candidate next-token probabilities come from you, whether that is your own model or any distribution you want to watermark. The watermarking math is barium's; the text generation is not.
 
 ```python
 from barium.detector import GreenListDetector
@@ -38,9 +38,9 @@ candidates = [
 watermarked = embedder.embed(candidates)
 ```
 
-The first position is selected by probability alone (it has no predecessor); every later position re-derives the green list from the selected predecessor and boosts its green candidates by δ. The output scores above the detector's threshold at sufficient length — `barium selftest` runs exactly this round-trip end to end.
+The first position is selected by probability alone (it has no predecessor); every later position re-derives the green list from the selected predecessor and boosts its green candidates by δ. The output is genuinely watermarked text — it scores above the detector's threshold at sufficient length, and `barium selftest` runs exactly this round-trip end to end.
 
-**This is a labelled reference demo, not production generation.** It ships no model and makes no claim to generation quality. For production generation with the open scheme, apply Hugging Face's `WatermarkingConfig` in your own stack at generation time. One boundary to know: barium's detector re-derives green lists over its own tokenisation and seed construction, so the round-trip guarantee in this package holds for text embedded and detected with barium — detecting output from a different generator's tokenizer and seed construction is out of scope. See [docs/plans/algorithm-spec.md](docs/plans/algorithm-spec.md) for the exact construction.
+**The demo label is about generation, not watermarking.** The watermark the embedder applies is the real scheme; what makes it a reference demo is that barium ships no language model and makes no claim to generation quality — you supply the candidates, barium biases the selection. For production generation with the open scheme, apply Hugging Face's `WatermarkingConfig` in your own stack at generation time. One boundary to know: barium's detector re-derives green lists over its own tokenisation and seed construction, so the round-trip guarantee in this package holds for text embedded and detected with barium — detecting output from a different generator's tokenizer and seed construction is out of scope. See [docs/plans/algorithm-spec.md](docs/plans/algorithm-spec.md) for the exact construction.
 
 ## Install
 
