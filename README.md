@@ -18,6 +18,30 @@ where G is the green count and T the scored positions. The z-score is a **false-
 
 **Length caveat:** short or low-entropy text carries no signal. The paper's "as few as 25 tokens" claim applies to high-entropy text; the measured minimum here is 25 scored tokens for 95% TPR at z = 4 on high-entropy text, and low-entropy text (prescriptive answers, code, factual completions) caps the achievable green rate at the fair-coin expectation — effectively undetectable at any realistic length. The detector reports an inconclusive verdict below 25 scored tokens rather than a low-confidence flag. Details in [docs/min-tokens.md](docs/min-tokens.md).
 
+## How embedding works
+
+Barium ships no language model, so embedding means supplying the candidate next-token probabilities yourself — from your own model, or from any distribution you want to watermark. The demo embedder implements the paper's soft rule: green candidates are boosted by δ = 2.0 before selection, and the highest-boosted candidate wins each position.
+
+```python
+from barium.detector import GreenListDetector
+from barium.embedder import DemoEmbedder
+
+detector = GreenListDetector(key)
+embedder = DemoEmbedder(detector)
+
+# One list of (token, probability) pairs per position, from your own model.
+candidates = [
+    [("the", 0.4), ("a", 0.3), ("time", 0.3)],   # first position: no predecessor
+    [("time", 0.5), ("year", 0.5)],               # green candidates boosted by delta
+    # ... one list per generated token
+]
+watermarked = embedder.embed(candidates)
+```
+
+The first position is selected by probability alone (it has no predecessor); every later position re-derives the green list from the selected predecessor and boosts its green candidates by δ. The output scores above the detector's threshold at sufficient length — `barium selftest` runs exactly this round-trip end to end.
+
+**This is a labelled reference demo, not production generation.** It ships no model and makes no claim to generation quality. For production generation with the open scheme, apply Hugging Face's `WatermarkingConfig` in your own stack at generation time. One boundary to know: barium's detector re-derives green lists over its own tokenisation and seed construction, so the round-trip guarantee in this package holds for text embedded and detected with barium — detecting output from a different generator's tokenizer and seed construction is out of scope. See [docs/plans/algorithm-spec.md](docs/plans/algorithm-spec.md) for the exact construction.
+
 ## Install
 
 Python 3.10+, stdlib only at runtime — no torch, no model weights, no network calls.
@@ -47,7 +71,7 @@ Round-trip proof (embed with the demo embedder, then detect):
 barium selftest
 ```
 
-The selftest output labels the embedder as a demo: it is a reference implementation for proving the round-trip, not production generation.
+The selftest output labels the embedder as a demo: it is a reference implementation for proving the round-trip, not production generation. Embedding is a Python API — see [How embedding works](#how-embedding-works); the CLI has no embed subcommand because supplying candidate probabilities is a job for your own model.
 
 ## MCP server
 
