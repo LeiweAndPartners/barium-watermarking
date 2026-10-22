@@ -73,6 +73,33 @@ barium selftest
 
 The selftest output labels the embedder as a demo: it is a reference implementation for proving the round-trip, not production generation. Embedding is a Python API — see [How embedding works](#how-embedding-works); the CLI has no embed subcommand because supplying candidate probabilities is a job for your own model.
 
+Embed in your own stack (two paths, same key at both ends):
+
+```python
+from barium.detector import GreenListDetector
+
+# Path 1: candidate probabilities (no model needed) — the demo embedder.
+from barium.embedder import DemoEmbedder
+
+detector = GreenListDetector(key)
+embedder = DemoEmbedder(detector)
+watermarked = embedder.embed(candidates)   # candidates: list of (token, p) lists
+
+# Path 2: logits biasing at generation time — bias your model's logits with
+# the green list before sampling. This is the paper's soft rule on raw logits,
+# the same construction Hugging Face's WatermarkingConfig applies.
+detector = GreenListDetector(key)
+logits = your_model(input_ids)             # your model's next-token logits
+for position, input_ids_so_far in enumerate(generation_steps):
+    previous = input_ids_so_far[-1]
+    green = detector.green_list(previous)
+    for token_id in green:
+        logits[position][token_id] += 2.0  # delta = 2.0, the paper's default
+# ... then sample from the biased logits as usual
+```
+
+The key must be the same at generation and detection, or the green lists will not match. See [How embedding works](#how-embedding-works) for the mechanics and the boundary on tokenisation.
+
 ## MCP server
 
 A stdio MCP server ships in the same package, with JSON-RPC 2.0 implemented by hand on the stdlib — no MCP SDK dependency:
