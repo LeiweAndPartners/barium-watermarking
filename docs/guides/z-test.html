@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The z-test — barium</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: Georgia, 'Times New Roman', serif; max-width: 46rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.6; }
+  code, pre, .mono { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+  pre { background: rgba(127,127,127,0.12); padding: 0.8rem 1rem; border-radius: 6px; overflow-x: auto; }
+  table { border-collapse: collapse; margin: 1rem 0; width: 100%; }
+  th, td { border: 1px solid rgba(127,127,127,0.4); padding: 0.4rem 0.7rem; text-align: left; }
+  .controls { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 1rem 0; align-items: baseline; }
+  input { font: inherit; padding: 0.4rem 0.6rem; border-radius: 4px; border: 1px solid rgba(127,127,127,0.5); width: 6rem; }
+  button { font: inherit; padding: 0.4rem 0.9rem; border-radius: 4px; border: 1px solid rgba(127,127,127,0.5); background: transparent; cursor: pointer; }
+  button:hover { background: rgba(127,127,127,0.15); }
+  .result { font-size: 1.05rem; margin: 1rem 0; }
+  .verdict { font-weight: bold; }
+  .note { font-size: 0.9rem; color: rgba(127,127,127,0.95); }
+  a { color: inherit; }
+</style>
+</head>
+<body>
+<h1>The z-test</h1>
+<p><a href="../../README.md">Back to the README</a> · <a href="https://arxiv.org/abs/2301.10226">The paper (arXiv:2301.10226 §2)</a></p>
+
+<p>Detection is a one-proportion z-test. Under the null hypothesis — text generated without knowledge of the key — each scored token is green with probability γ = 0.5, the fair-coin expectation. The test asks: how many standard deviations is the observed green count above that expectation?</p>
+
+<pre>z = (G − γ·T) / √(T·γ·(1−γ))</pre>
+
+<p><strong>The z-score is a false-positive rate, not a certainty.</strong> A threshold of z = 4 means unwatermarked text exceeds it with probability about 3×10⁻⁵ — the rate at which human text gets flagged, not a measure of how certain a flag is. The prosecutor's fallacy applies: P(flag | human) is not P(human | flag).</p>
+
+<p>Worked example with real numbers: G = 18 green of T = 20 scored at γ = 0.5.</p>
+<pre>z = (18 − 10) / √(20 × 0.5 × 0.5) = 8 / √5 = 3.578</pre>
+<p>At z = 3.578 the false-positive rate is about 1.7×10⁻⁴: unwatermarked text reaches this z roughly once in 5,800. That is the honest reading — not "82% certain the text is watermarked".</p>
+
+<p>Try your own numbers:</p>
+<div class="controls">
+  <label>Green count G <input id="g" type="number" value="18" min="0"></label>
+  <label>Scored T <input id="t" type="number" value="20" min="1"></label>
+  <label>γ <input id="gamma" type="number" value="0.5" step="0.05" min="0.05" max="0.95"></label>
+  <button id="run">Compute</button>
+</div>
+<div class="result" id="out"></div>
+
+<p class="note">The false-positive rate is the standard-normal upper tail at z. The verdict compares z against the threshold (default 4.0); below 25 scored positions the package reports an inconclusive verdict, because short or low-entropy text carries no signal.</p>
+
+<script>
+(function () {
+  // Standard-normal upper tail via the complementary error function,
+  // the same quantity scipy.stats.norm.sf computes in the reference repo.
+  function normalSf(z) {
+    return erfc(z / Math.sqrt(2)) / 2;
+  }
+  function erfc(x) {
+    // Abramowitz and Stegun 7.1.26, accurate to about 1.5e-7.
+    var sign = x < 0 ? -1 : 1;
+    x = Math.abs(x);
+    var a1 = 0.254829592, a2 = -0.284496736, a3 = 1.421413741,
+        a4 = -1.453152027, a5 = 1.061405429, p = 0.3275911;
+    var t = 1 / (1 + p * x);
+    var y = 1 - (((((a5 * t + a4) * t) + a3) * t + a2) * t + a1) * t * Math.exp(-x * x);
+    return sign === 1 ? 1 - y : y;
+  }
+  function run() {
+    var g = parseFloat(document.getElementById('g').value) || 0;
+    var t = parseInt(document.getElementById('t').value, 10) || 1;
+    var gamma = parseFloat(document.getElementById('gamma').value) || 0.5;
+    var numer = g - gamma * t;
+    var denom = Math.sqrt(t * gamma * (1 - gamma));
+    var z = numer / denom;
+    var fpr = normalSf(z);
+    var verdict = z > 4.0 ? 'watermarked (z above 4.0)' :
+                  z > 0 ? 'not_watermarked at the default threshold' : 'not_watermarked';
+    document.getElementById('out').innerHTML =
+      'z = <span class="mono">' + z.toFixed(3) + '</span> · ' +
+      'false-positive rate = <span class="mono">' + fpr.toExponential(2) + '</span> · ' +
+      'verdict at the default threshold: <span class="verdict">' + verdict + '</span>';
+  }
+  document.getElementById('run').addEventListener('click', run);
+  run();
+})();
+</script>
+</body>
+</html>

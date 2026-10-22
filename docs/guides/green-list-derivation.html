@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Green-list derivation — barium</title>
+<style>
+  :root { color-scheme: light dark; }
+  body { font-family: Georgia, 'Times New Roman', serif; max-width: 46rem; margin: 2rem auto; padding: 0 1rem; line-height: 1.6; }
+  code, pre, .mono { font-family: 'SF Mono', Menlo, Consolas, monospace; }
+  pre { background: rgba(127,127,127,0.12); padding: 0.8rem 1rem; border-radius: 6px; overflow-x: auto; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(3.4rem, 1fr)); gap: 0.3rem; margin: 1rem 0; }
+  .tok { padding: 0.35rem 0; text-align: center; border-radius: 4px; font-size: 0.85rem; border: 1px solid rgba(127,127,127,0.35); }
+  .green { background: rgba(48,164,108,0.25); border-color: rgba(48,164,108,0.7); }
+  .red { background: rgba(200,80,80,0.14); }
+  button { font: inherit; padding: 0.4rem 0.9rem; border-radius: 4px; border: 1px solid rgba(127,127,127,0.5); background: transparent; cursor: pointer; }
+  button:hover { background: rgba(127,127,127,0.15); }
+  .controls { display: flex; gap: 0.5rem; flex-wrap: wrap; margin: 1rem 0; }
+  input { font: inherit; padding: 0.4rem 0.6rem; border-radius: 4px; border: 1px solid rgba(127,127,127,0.5); width: 9rem; }
+  .note { font-size: 0.9rem; color: rgba(127,127,127,0.95); }
+  a { color: inherit; }
+</style>
+</head>
+<body>
+<h1>Green-list derivation</h1>
+<p><a href="../../README.md">Back to the README</a> · <a href="https://arxiv.org/abs/2301.10226">The paper (arXiv:2301.10226 §2)</a></p>
+
+<p>The scheme partitions the vocabulary into a green list and a red list using a secret key. The same key and the same previous token always produce the same split — which is why a detector with the key can re-derive exactly what the generator used, with no model access.</p>
+
+<p>The construction, per the reference implementation's <span class="mono">simple_1</span> scheme:</p>
+<pre>seed = key × previous_token_id
+permutation = seeded shuffle of the vocabulary
+green list  = first floor(γ × V) entries   (γ = 0.5)</pre>
+
+<p>Try it: change the key or the previous token and watch the split move. The same key and token always give the same split; a different key gives an unrelated one.</p>
+
+<div class="controls">
+  <label>Key <input id="key" type="number" value="123456789" min="1"></label>
+  <label>Previous token <input id="prev" type="text" value="time" size="8"></label>
+  <button id="derive">Derive</button>
+</div>
+
+<p>Seed: <span class="mono" id="seedOut">—</span> · Green list size: <span class="mono" id="sizeOut">—</span> of <span class="mono">V = 50</span></p>
+<div class="grid" id="grid"></div>
+<p class="note">A 50-token stand-in vocabulary. Green entries are the first floor(γ × V) of the seeded permutation; the rest are red. In the real package V = 50,000.</p>
+
+<p><strong>Why this matters for detection:</strong> the detector holds the key and the previous token, so it re-derives the same green list and checks membership. Without the key, the split is unpredictable — which is the whole security property.</p>
+
+<script>
+(function () {
+  var V = 50;
+  function tokenId(token) {
+    var sum = 0;
+    for (var i = 0; i < token.length; i++) sum += token.charCodeAt(i);
+    return sum;
+  }
+  // Deterministic seeded shuffle (Fisher-Yates with a mulberry32 PRNG),
+  // a stand-in for the package's random.Random(seed).sample construction.
+  function mulberry32(a) {
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      var t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function derive(key, prev) {
+    var seed = (key * tokenId(prev)) >>> 0;
+    var rand = mulberry32(seed);
+    var perm = [];
+    for (var i = 0; i < V; i++) perm.push(i);
+    for (var j = V - 1; j > 0; j--) {
+      var k = Math.floor(rand() * (j + 1));
+      var tmp = perm[j]; perm[j] = perm[k]; perm[k] = tmp;
+    }
+    var greenSize = Math.floor(V * 0.5);
+    return { seed: seed, green: perm.slice(0, greenSize) };
+  }
+  function render() {
+    var key = parseInt(document.getElementById('key').value, 10) || 1;
+    var prev = document.getElementById('prev').value || 'time';
+    var out = derive(key, prev);
+    document.getElementById('seedOut').textContent = out.seed;
+    document.getElementById('sizeOut').textContent = out.green.length;
+    var greenSet = {};
+    out.green.forEach(function (id) { greenSet[id] = true; });
+    var grid = document.getElementById('grid');
+    grid.innerHTML = '';
+    for (var id = 0; id < V; id++) {
+      var cell = document.createElement('div');
+      cell.className = 'tok ' + (greenSet[id] ? 'green' : 'red');
+      cell.textContent = id;
+      grid.appendChild(cell);
+    }
+  }
+  document.getElementById('derive').addEventListener('click', render);
+  document.getElementById('key').addEventListener('change', render);
+  document.getElementById('prev').addEventListener('change', render);
+  render();
+})();
+</script>
+</body>
+</html>
