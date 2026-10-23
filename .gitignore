@@ -27,3 +27,7 @@ htmlcov/
 .vscode/
 .idea/
 .DS_Store
+
+# Internal planning, blog drafts, and house style. Not part of the package.
+# These are working documents for the build, not project documentation.
+docs/plans/
