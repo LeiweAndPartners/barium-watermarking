@@ -166,6 +166,74 @@ def test_notification_produces_no_response() -> None:
     assert response["id"] == 7
 
 
+def test_non_object_json_does_not_crash_server() -> None:
+    """A decoded non-object (bare number, list, string) gets a protocol error
+    and the server survives: a bad line must not break the session."""
+    payload = (
+        "5\n"
+        + "[1, 2]\n"
+        + '"a string"\n'
+        + json.dumps({"jsonrpc": "2.0", "id": 8, "method": "tools/list", "params": {}})
+        + "\n"
+    )
+    process = subprocess.run(
+        [sys.executable, "-m", "barium.mcp_server"],
+        input=payload,
+        capture_output=True,
+        text=True,
+        cwd=REPO_ROOT,
+        timeout=60,
+    )
+    assert process.returncode == 0, process.stderr
+    lines = [line for line in process.stdout.splitlines() if line.strip()]
+    # One error per bad line, then the answer to the valid request.
+    assert len(lines) == 4
+    for line in lines[:3]:
+        response = json.loads(line)
+        assert response["error"]["code"] == -32600
+    assert json.loads(lines[3])["id"] == 8
+
+
+def test_non_dict_params_and_arguments_do_not_crash() -> None:
+    """Non-dict params and arguments are treated as empty, not a crash."""
+    payload = (
+        json.dumps(
+            {
+                "jsonrpc": "2.0",
+                "id": 9,
+                "method": "tools/call",
+                "params": 5,
+            }
+        )
+        + "\n"
+        + json.dumps(
+            {
+                "jsonrpc": "2.0",
+                "id": 10,
+                "method": "tools/call",
+                "params": {"name": "generate_key", "arguments": 5},
+            }
+        )
+        + "\n"
+    )
+    process = subprocess.run(
+        [sys.executable, "-m", "barium.mcp_server"],
+        input=payload,
+        capture_output=True,
+        text=True,
+        cwd=REPO_ROOT,
+        timeout=60,
+    )
+    assert process.returncode == 0, process.stderr
+    lines = [line for line in process.stdout.splitlines() if line.strip()]
+    assert len(lines) == 2
+    # params=5 is treated as empty, so the tool name is missing -> -32602.
+    assert json.loads(lines[0])["error"]["code"] == -32602
+    # arguments=5 is treated as empty, so generate_key succeeds.
+    stats = json.loads(json.loads(lines[1])["result"]["content"][0]["text"])
+    assert "key" in stats
+
+
 def test_tool_descriptions_carry_honesty_framing() -> None:
     """Tool descriptions state the green-list-only framing and the FPR framing."""
     from barium.mcp_server import TOOL_DEFINITIONS

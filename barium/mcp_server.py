@@ -136,9 +136,21 @@ def handle_request(request: dict[str, object]) -> dict[str, object] | None:
     Returns:
         The response object, or None for notifications.
     """
+    if not isinstance(request, dict):
+        # A decoded non-object (bare number, list, string) is not a request.
+        # Answer with the protocol error rather than crashing: a bad line is
+        # the caller's problem to read, not a broken session.
+        return {
+            "jsonrpc": "2.0",
+            "id": None,
+            "error": {"code": -32600, "message": "invalid request"},
+        }
+
     request_id = request.get("id")
     method = request.get("method")
     params = request.get("params") or {}
+    if not isinstance(params, dict):
+        params = {}
 
     if request_id is None:
         # A notification: no reply, whatever the method.
@@ -165,6 +177,8 @@ def handle_request(request: dict[str, object]) -> dict[str, object] | None:
     if method == "tools/call":
         name = params.get("name")
         arguments = params.get("arguments") or {}
+        if not isinstance(arguments, dict):
+            arguments = {}
         handler = TOOL_HANDLERS.get(name)
         if handler is None:
             return {
@@ -214,7 +228,16 @@ def serve() -> None:
                 "error": {"code": -32700, "message": "parse error"},
             }
         else:
-            response = handle_request(request)
+            # No single bad line may kill the process: a crash here would
+            # break the session for every later request, not just this one.
+            try:
+                response = handle_request(request)
+            except Exception:  # pragma: no cover - defensive
+                response = {
+                    "jsonrpc": "2.0",
+                    "id": None,
+                    "error": {"code": -32603, "message": "internal error"},
+                }
         if response is not None:
             print(json.dumps(response), flush=True)
 

@@ -78,7 +78,7 @@ class DemoEmbedder:
             )
         return " ".join(tokens)
 
-    def _boosted(self, pair: tuple[str, float], green: frozenset[str]) -> float:
+    def _boosted(self, pair: tuple[str, float], green: frozenset[int]) -> float:
         """Return the boosted probability for one (token, probability) pair.
 
         The soft rule: green candidates are boosted by delta, red candidates

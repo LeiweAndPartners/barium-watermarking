@@ -4,7 +4,7 @@ Role: re-derive the green/red vocabulary split from the key, count green
 tokens in the text, and compute a one-proportion z-score against the fair-coin
 expectation. The construction follows arXiv:2301.10226 §2 and the reference
 implementation at ``jwkirchenbauer/lm-watermarking`` (``watermark_processor.py``);
-the line-by-line spec is docs/plans/algorithm-spec.md.
+the line-by-line spec is docs/algorithm-spec.md.
 
 Tokenisation strategy: barium ships no tokenizer and no model, so it defines
 its own deterministic tokenisation - text is lowercased, split on whitespace,
@@ -135,7 +135,7 @@ class GreenListDetector:
         # re-seeding for the same reason (_get_ngram_score_cached with
         # lru_cache). Keyed on (key, gamma, vocab_size, previous_token) so a
         # changed parameter never reuses a stale split.
-        self._green_cache: dict[tuple[int, float, int, str], frozenset[str]] = {}
+        self._green_cache: dict[tuple[int, float, int, str], frozenset[int]] = {}
 
     def _token_id(self, token: str) -> int:
         """Map a token deterministically into the synthetic vocab space.
@@ -149,13 +149,26 @@ class GreenListDetector:
         digest = hashlib.blake2b(token.encode("utf-8"), digest_size=8).digest()
         return int.from_bytes(digest, "big") % self.vocab_size
 
-    def green_list(self, previous_token: str) -> frozenset[str]:
+    def _seed_id(self, token: str) -> int:
+        """Return a full-width id for seeding, derived from the token.
+
+        blake2b over the UTF-8 bytes, order-dependent: an anagram produces a
+        different id, so "time" and "emit" seed unrelated splits. A byte sum
+        would be order-independent and give both tokens the same green list.
+        The full 64-bit digest (not reduced modulo vocab_size) keeps the seed
+        space wide: the seed is key * _seed_id, and reducing first would
+        collapse key * id collisions.
+        """
+        digest = hashlib.blake2b(token.encode("utf-8"), digest_size=8).digest()
+        return int.from_bytes(digest, "big")
+
+    def green_list(self, previous_token: str) -> frozenset[int]:
         """Return the green list induced by the previous token.
 
         Seed construction follows the reference implementation's ``simple_1``
         scheme: the seed is the hash key times the previous token id
         (algorithm-spec.md, Seed derivation). The hash key is the user's key;
-        the token id is the sum of the UTF-8 code points of the token, a
+        the token id is a full-width blake2b digest of the token, a
         deterministic stand-in for a tokenizer id. The green list is the first
         floor(gamma * vocab_size) entries of the seeded permutation
         (algorithm-spec.md, Green-list size).
@@ -164,13 +177,14 @@ class GreenListDetector:
             previous_token: The token immediately before the position scored.
 
         Returns:
-            The green vocabulary for positions following previous_token.
+            The green vocabulary for positions following previous_token, as
+            synthetic vocabulary ids in [0, vocab_size).
         """
         cache_key = (self.key, self.gamma, self.vocab_size, previous_token)
         cached = self._green_cache.get(cache_key)
         if cached is not None:
             return cached
-        previous_id = sum(previous_token.encode("utf-8"))
+        previous_id = self._seed_id(previous_token)
         seed = self.key * previous_id
         rng = random.Random(seed)
         green_size = int(self.vocab_size * self.gamma)
