@@ -36,7 +36,7 @@ from barium.detector import GreenListDetector, tokenize
 from barium.embedder import DemoEmbedder
 from barium.keygen import generate_key
 
-# Sweep lengths from the build plan.
+# Scored lengths swept by the calibration.
 SWEEP_LENGTHS = (10, 16, 25, 32, 50, 64, 100, 128, 200, 400)
 
 # Samples per length per arm (watermarked and unwatermarked).
@@ -72,17 +72,40 @@ def _normal_isf(p: float) -> float:
     return (lo + hi) / 2.0
 
 
-def _candidate_lists(num_tokens: int) -> list[list[tuple[str, float]]]:
-    """High-entropy candidate pool with near-uniform probabilities."""
-    probability = 1.0 / len(_WORDS)
-    return [[(word, probability) for word in _WORDS] for _ in range(num_tokens)]
+def _candidate_lists(
+    num_tokens: int, rng: random.Random | None = None, width: int | None = None
+) -> list[list[tuple[str, float]]]:
+    """Build a candidate pool for the demo embed.
+
+    With no rng, every position offers the full word list at near-uniform
+    probabilities: the deterministic ceiling case, where the delta boost wins
+    every position and the realised green rate is 1.0.
+
+    With an rng, each position offers a random subset of the words at random
+    probabilities, the way a model's top-k logprobs behave: some positions
+    offer no green candidate, so the realised green rate sits below 1.0 and
+    varies per sample. That is what makes the sweep's TPR a rate rather than
+    a repeated single sample.
+    """
+    if rng is None:
+        probability = 1.0 / len(_WORDS)
+        return [[(word, probability) for word in _WORDS] for _ in range(num_tokens)]
+    k = width if width is not None else min(10, len(_WORDS))
+    return [
+        [(word, rng.random()) for word in rng.sample(_WORDS, k)]
+        for _ in range(num_tokens)
+    ]
 
 
-def _watermarked_text(key: int, num_tokens: int) -> str:
-    """Embed a watermarked text of the target length with the demo embedder."""
+def _watermarked_text(key: int, num_tokens: int, rng: random.Random) -> str:
+    """Embed a watermarked text of the target length with the demo embedder.
+
+    The candidate pool is drawn from rng, so repeated calls produce different
+    texts: the watermarked arm is a genuine sample, not one text repeated.
+    """
     detector = GreenListDetector(key)
     embedder = DemoEmbedder(detector)
-    return embedder.embed(_candidate_lists(num_tokens))
+    return embedder.embed(_candidate_lists(num_tokens, rng=rng))
 
 
 def _unwatermarked_text(num_tokens: int, seed: int) -> str:
@@ -149,7 +172,10 @@ def sweep(
         lengths: Scored lengths to sweep.
         samples: Samples per arm per length.
         z_threshold: Verdict threshold.
-        seed: Seed for the unwatermarked arm, so the sweep reproduces.
+        seed: Seed for both arms, so the sweep reproduces. The watermarked
+            arm draws its candidate pools from the same seed, so its TPR is
+            an empirical rate over distinct samples rather than one text
+            repeated.
 
     Returns:
         One dict per length: length, watermarked TPR, unwatermarked flag rate.
@@ -159,9 +185,10 @@ def sweep(
     for length in lengths:
         # The detector scores length - 1 positions; embed one extra token so
         # the scored length matches the sweep target.
+        watermarked_rng = random.Random(seed)
         watermarked_flags = 0
         for i in range(samples):
-            text = _watermarked_text(key, length + 1)
+            text = _watermarked_text(key, length + 1, rng=watermarked_rng)
             if detector.detect(text).verdict == "watermarked":
                 watermarked_flags += 1
 

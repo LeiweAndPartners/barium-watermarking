@@ -91,3 +91,30 @@ def test_selftest_with_explicit_key(capsys) -> None:
     barium.cli.main(["selftest", "--key", str(key), "--tokens", "50"])
     output = capsys.readouterr().out
     assert f"key: {key}" in output
+
+
+def test_detect_with_custom_z_threshold(capsys) -> None:
+    """A custom --z-threshold is honoured in the verdict and echoed in output."""
+    from barium.detector import GreenListDetector
+    from barium.embedder import DemoEmbedder
+    from barium.keygen import generate_key
+
+    # Build a genuinely watermarked text, then detect it at a threshold no
+    # honest z-score can miss and at one no honest z-score can pass.
+    key = generate_key()
+    detector = GreenListDetector(key)
+    embedder = DemoEmbedder(detector)
+    words = (
+        "time year people way day man thing woman life child world school "
+        "state family student group country problem hand part place case"
+    ).split()
+    candidates = [[(w, 1.0 / len(words)) for w in words] for _ in range(60)]
+    text = embedder.embed(candidates)
+
+    barium.cli.main(["detect", text, "--key", str(key), "--z-threshold", "0.1"])
+    output = capsys.readouterr().out
+    assert "verdict: watermarked" in output
+
+    barium.cli.main(["detect", text, "--key", str(key), "--z-threshold", "1000"])
+    output = capsys.readouterr().out
+    assert "verdict: not_watermarked" in output

@@ -55,28 +55,65 @@ class DemoEmbedder:
         boosted probability wins. The first position has no predecessor, so
         it is selected by probability alone.
 
+        Candidates are normalised through the detector's tokenisation before
+        any green check: real model tokens arrive decorated (" time",
+        "time,", "Time"), and the detector scores the normalised form, so
+        checking the raw string would hash a different token than the
+        detector sees and break the round-trip. When several candidates
+        normalise to the same token, the highest probability wins.
+
         Args:
             candidates: Candidate next-token probabilities, one list of
-                (token, probability) pairs per position.
+                (token, probability) pairs per position. Tokens may be raw
+                model tokens; they are normalised internally.
             seed: Unused; kept for API symmetry. Selection is deterministic
                 given the candidates.
 
         Returns:
-            The watermarked text: the selected tokens joined with spaces.
+            The watermarked text: the normalised selected tokens joined with
+            spaces, matching what the detector scores.
         """
         tokens: list[str] = []
-        for position, options in enumerate(candidates):
-            if not options:
+        for options in candidates:
+            normalised = self._normalise(options)
+            if not normalised:
                 continue
-            if position == 0:
-                tokens.append(max(options, key=lambda pair: pair[1])[0])
+            if not tokens:
+                # The first emitted token has no predecessor, so it is
+                # selected by probability alone. Keyed on emitted tokens
+                # rather than the enumerate index: an empty first candidate
+                # list must not hand the green boost to the next position.
+                tokens.append(max(normalised, key=lambda pair: pair[1])[0])
                 continue
             previous = tokens[-1]
             green = self.detector.green_list(previous)
             tokens.append(
-                max(options, key=lambda pair: self._boosted(pair, green))[0]
+                max(normalised, key=lambda pair: self._boosted(pair, green))[0]
             )
         return " ".join(tokens)
+
+    def _normalise(
+        self, options: list[tuple[str, float]]
+    ) -> list[tuple[str, float]]:
+        """Map candidates into the detector's token space.
+
+        Each candidate token is run through the detector's tokenisation (the
+        same lowercasing, whitespace split, and punctuation strip that
+        detect() applies), so green membership is checked on the form the
+        detector scores. Multi-token candidates collapse to their first
+        token; candidates that normalise to nothing are dropped. When
+        several candidates share a normalised form, the highest probability
+        is kept.
+        """
+        best: dict[str, float] = {}
+        for token, probability in options:
+            parts = tokenize(token)
+            if not parts:
+                continue
+            key = parts[0]
+            if probability > best.get(key, float("-inf")):
+                best[key] = probability
+        return list(best.items())
 
     def _boosted(self, pair: tuple[str, float], green: frozenset[int]) -> float:
         """Return the boosted probability for one (token, probability) pair.

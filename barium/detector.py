@@ -46,7 +46,8 @@ DEFAULT_Z_THRESHOLD = 4.0
 
 # Below this many scored positions the verdict is inconclusive rather than a
 # low-confidence flag. The paper's "as few as 25 tokens" applies to
-# high-entropy text; the exact operating minimum is calibrated in Phase 5.
+# high-entropy text; the exact operating minimum is calibrated in
+# experiments/min_tokens.py.
 DEFAULT_MIN_SCORED_TOKENS = 25
 
 # Vocabulary size for the green/red split. Barium ships no tokenizer, so the
