@@ -61,6 +61,20 @@ Low entropy caps the achievable green rate p, matching Kirchenbauer Appendix G: 
 
 This is the honest version of the paper's "as few as 25 tokens" claim: it holds for high-entropy text, where the model has real freedom to prefer green tokens. Low-entropy text — prescriptive answers, code, factual completions (the paper's own low-entropy example is code) — carries no reliable signal at any length a detector will see. The detector's inconclusive verdict below 25 scored tokens exists so short texts are reported as "no signal available" rather than flagged.
 
+## Width sensitivity: the minimum is a diversity claim
+
+The tables above hold for the calibration's 10-candidate pool. The minimum detectable length also depends on candidate width w — how many candidates each position offers — not just on text length. The mechanism: the probability that a position offers no green candidate is (1 − γ)^w, so at narrow widths a sizeable fraction of positions is unwatermarkable and the realised green rate collapses toward γ. Measured TPR at z = 4 (100 samples per cell, key 123456789, seed 42):
+
+| width w | T=25 | T=50 | T=100 | T=200 |
+|---|---|---|---|---|
+| 2 | 0.050 | 0.270 | 0.870 | 1.000 |
+| 3 | 0.310 | 0.970 | 1.000 | 1.000 |
+| 4 | 0.790 | 1.000 | 1.000 | 1.000 |
+| 5 | 0.980 | 1.000 | 1.000 | 1.000 |
+| 8–10 | 1.000 | 1.000 | 1.000 | 1.000 |
+
+The 25-token headline holds only for w ≥ 5. At w = 2, a quarter of positions offer no green candidate, and the 25-token TPR collapses to 0.050 — the text is effectively undetectable at that length even though it is long enough. Length alone is not the detectability claim; candidate diversity is the other half of it. This is the regime of a served model's `top_logprobs` output: the README's harvesting path supplies candidates of width N, and N ≥ 5 keeps the 25-token minimum (see [Harvesting candidates from a served model](../README.md#harvesting-candidates-from-a-served-model)).
+
 ## In words
 
 - **25 scored tokens** is the measured minimum for 95% TPR at z = 4 (FPR ~3×10⁻⁵) on high-entropy text — **25 words** at barium's whitespace tokenisation (1 token per word in this pool).
@@ -73,4 +87,4 @@ This is the honest version of the paper's "as few as 25 tokens" claim: it holds 
 .venv/bin/python experiments/min_tokens.py
 ```
 
-The sweep seeds the unwatermarked arm from a fixed seed; the watermarked arm is deterministic given the key (the demo embedder's selection is deterministic). The reproducibility test in `tests/test_calibration.py` pins the measured minimum from a fixed seed.
+The sweep seeds the unwatermarked arm from a fixed seed; the watermarked arm is deterministic given the key (the demo embedder's selection is deterministic). The reproducibility test in `tests/test_calibration.py` pins the measured minimum from a fixed seed. The width sweep runs in the same script and prints the TPR table by width and length; each (width, length) cell derives its own seed, so the table reproduces independently of sweep order.

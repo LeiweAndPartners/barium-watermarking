@@ -352,12 +352,22 @@ def test_decorated_tokens_normalise_to_clean_text() -> None:
     key = generate_key()
     detector = GreenListDetector(key)
     embedder = DemoEmbedder(detector)
+    # Both second-position candidates must be red given "time" for this key:
+    # the selection compares boosted probabilities, so a green 0.1 candidate
+    # (0.1 + delta = 2.1) beats a red 0.9 candidate, and a green 0.9
+    # candidate beats a red one. With both red the argmax is the 0.9
+    # candidate for every key, which is what the assertion pins.
+    second = next(w for w in _WORDS if not detector.is_green("time", w))
+    third = next(
+        w for w in _WORDS
+        if w != second and not detector.is_green("time", w)
+    )
     candidates = [
         [(" time", 0.9), (" year", 0.1)],
-        [(" Day,", 0.9), (" week", 0.1)],
+        [(f" {third},", 0.9), (f" {second}", 0.1)],
     ]
     text = embedder.embed(candidates)
-    assert text == "time day"
+    assert text == f"time {third}"
     assert "  " not in text
 
 

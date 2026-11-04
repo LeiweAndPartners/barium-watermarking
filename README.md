@@ -16,7 +16,7 @@ $$z = \frac{G - \gamma T}{\sqrt{T \gamma (1 - \gamma)}}$$
 
 where G is the green count and T the scored positions. The z-score is a **false-positive rate, not a certainty**: a threshold of z = 4 means unwatermarked text exceeds it with probability about 3×10⁻⁵ — the rate at which human text gets flagged, not a measure of how certain a flag is. The prosecutor's fallacy applies: P(flag | human) is not P(human | flag).
 
-**Length caveat:** short or low-entropy text carries no signal. The paper's "as few as 25 tokens" claim applies to high-entropy text; the measured minimum here is 25 scored tokens for 95% TPR at z = 4 on high-entropy text, and low-entropy text (prescriptive answers, code, factual completions) caps the achievable green rate at the fair-coin expectation — effectively undetectable at any realistic length. The detector reports an inconclusive verdict below 25 scored tokens rather than a low-confidence flag. Details in [docs/min-tokens.md](docs/min-tokens.md).
+**Length caveat:** short or low-entropy text carries no signal. The paper's "as few as 25 tokens" claim applies to high-entropy text; the measured minimum here is 25 scored tokens for 95% TPR at z = 4 on high-entropy text, and low-entropy text (prescriptive answers, code, factual completions) caps the achievable green rate at the fair-coin expectation — effectively undetectable at any realistic length. The minimum is also a function of candidate width: the 25-token figure holds when each position offers at least 5 candidates, and collapses at narrower pools (see [docs/min-tokens.md](docs/min-tokens.md)). The detector reports an inconclusive verdict below 25 scored tokens rather than a low-confidence flag. Details in [docs/min-tokens.md](docs/min-tokens.md).
 
 ## How embedding works
 
@@ -99,6 +99,32 @@ for position, input_ids_so_far in enumerate(generation_steps):
 ```
 
 The key must be the same at generation and detection, or the green lists will not match. See [How embedding works](#how-embedding-works) for the mechanics and the boundary on tokenisation.
+
+### Harvesting candidates from a served model
+
+Path 1 needs candidate next-token probabilities. A served model gives them through the OpenAI-compatible logprobs fields: request `logprobs: true, top_logprobs: N` and each generated position returns its top-N candidates with log-probabilities. Those pairs are exactly the `(token, probability)` lists the demo embedder takes — no model weights, no torch, no logit access:
+
+```python
+import math
+
+response = client.chat.completions.create(
+    model="your-model",
+    messages=[{"role": "user", "content": prompt}],
+    logprobs=True,
+    top_logprobs=20,
+)
+candidates = [
+    [(entry.token, math.exp(entry.logprob)) for entry in position.top_logprobs]
+    for position in response.choices[0].logprobs.content
+]
+watermarked = embedder.embed(candidates)
+```
+
+Why not the alternatives:
+
+- **No full logit vector over HTTP.** vLLM and the OpenAI-compatible servers expose sampled tokens and top-k logprobs, not the raw next-token distribution, so Path 2's logits biasing is not reachable through the API.
+- **`logit_bias` is the right concept at the wrong layer.** It biases at request time, needs the previous token (one request per generated token), and caps at 300 entries — a green list is half the vocabulary.
+- **`top_logprobs` is capped.** vLLM rejects N above its `max_logprobs` engine setting (20 by default) with a 400. 20 candidates per position is enough: the probability that a position offers no green candidate is (1 − γ)^w, about 10⁻⁶ at w = 20, and the measured 25-token minimum holds for w ≥ 5 (see [docs/min-tokens.md](docs/min-tokens.md)).
 
 ## MCP server
 

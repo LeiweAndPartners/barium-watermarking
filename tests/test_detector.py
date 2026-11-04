@@ -178,3 +178,15 @@ def test_module_docstring_carries_honesty_framing() -> None:
 
     assert detector_module.__doc__ is not None
     assert "false-positive rate" in detector_module.__doc__
+
+
+def test_anagram_previous_tokens_seed_different_green_lists() -> None:
+    """Anagrams seed unrelated splits: the seed id is order-dependent.
+
+    The seed id is blake2b over the UTF-8 bytes, not a byte sum, so "time"
+    and "emit" produce different green lists. A byte sum would be
+    order-independent and give both tokens the identical split, reducing the
+    effective seed entropy.
+    """
+    detector = GreenListDetector(123456789)
+    assert detector.green_list("time") != detector.green_list("emit")

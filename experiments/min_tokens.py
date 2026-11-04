@@ -39,6 +39,10 @@ from barium.keygen import generate_key
 # Scored lengths swept by the calibration.
 SWEEP_LENGTHS = (10, 16, 25, 32, 50, 64, 100, 128, 200, 400)
 
+# Candidate widths swept by the width calibration: the top-k regime of a
+# served model's logprobs, where each position offers only k candidates.
+SWEEP_WIDTHS = (2, 3, 4, 5, 8, 10)
+
 # Samples per length per arm (watermarked and unwatermarked).
 SAMPLES_PER_ARM = 1_000
 
@@ -97,15 +101,20 @@ def _candidate_lists(
     ]
 
 
-def _watermarked_text(key: int, num_tokens: int, rng: random.Random) -> str:
+def _watermarked_text(
+    key: int, num_tokens: int, rng: random.Random, width: int | None = None
+) -> str:
     """Embed a watermarked text of the target length with the demo embedder.
 
     The candidate pool is drawn from rng, so repeated calls produce different
     texts: the watermarked arm is a genuine sample, not one text repeated.
+    The optional width caps how many candidates each position offers, the way
+    a model's top-k logprobs behave; the default keeps the calibration's
+    10-candidate pool.
     """
     detector = GreenListDetector(key)
     embedder = DemoEmbedder(detector)
-    return embedder.embed(_candidate_lists(num_tokens, rng=rng))
+    return embedder.embed(_candidate_lists(num_tokens, rng=rng, width=width))
 
 
 def _unwatermarked_text(num_tokens: int, seed: int) -> str:
@@ -208,6 +217,58 @@ def sweep(
     return results
 
 
+def sweep_widths(
+    key: int,
+    widths: tuple[int, ...] = SWEEP_WIDTHS,
+    lengths: tuple[int, ...] = (25, 50, 100, 200),
+    samples: int = 100,
+    z_threshold: float = 4.0,
+    seed: int = 42,
+) -> list[dict[str, object]]:
+    """Sweep candidate width: TPR per (width, length) pair.
+
+    The watermarked arm draws candidate pools of the given width, so the
+    sweep measures how the minimum detectable length depends on candidate
+    diversity rather than text length alone. The mechanism under test is
+    P(no green candidate at a position) = (1 - gamma)^w: at narrow widths a
+    sizeable fraction of positions offers no green candidate, the realised
+    green rate collapses toward gamma, and the z-score with it.
+
+    The unwatermarked arm is omitted: the null does not depend on candidate
+    width (filler words involve no embedder), and the false-positive rate is
+    fixed by the threshold, so the main sweep's null arm already validates
+    it.
+
+    Args:
+        key: Per-deployment secret key.
+        widths: Candidate pool widths to sweep.
+        lengths: Scored lengths to sweep.
+        samples: Samples per (width, length) cell.
+        z_threshold: Verdict threshold.
+        seed: Seed for the watermarked arm; each cell derives its own seed
+            so every cell reproduces independently of sweep order.
+
+    Returns:
+        One dict per cell: width, length, tpr.
+    """
+    detector = GreenListDetector(key, z_threshold=z_threshold)
+    results = []
+    for width in widths:
+        for length in lengths:
+            # Derive a per-cell seed arithmetically: random.Random rejects
+            # tuple seeds, and a derived int keeps cells reproducible.
+            rng = random.Random(seed * 1_000_003 + width * 10_009 + length)
+            flags = 0
+            for _ in range(samples):
+                text = _watermarked_text(key, length + 1, rng=rng, width=width)
+                if detector.detect(text).verdict == "watermarked":
+                    flags += 1
+            results.append(
+                {"width": width, "length": length, "tpr": flags / samples}
+            )
+    return results
+
+
 def measured_min_tokens(
     results: list[dict[str, object]],
     target_tpr: float = 0.95,
@@ -237,6 +298,21 @@ def main() -> None:
         print(f"measured min for 95% TPR: {minimum}")
         print(f"analytic min: {analytic:.1f}")
         print()
+
+    print("width sweep at z = 4.0: TPR by candidate width and scored length")
+    width_results = sweep_widths(key)
+    by_width: dict[int, dict[int, float]] = {}
+    for row in width_results:
+        by_width.setdefault(int(row["width"]), {})[int(row["length"])] = float(
+            row["tpr"]
+        )
+    swept_lengths = sorted({int(row["length"]) for row in width_results})
+    header = " ".join(f"T={n:<3}" for n in swept_lengths)
+    print(f"{'width':>5} {header}")
+    for width in sorted(by_width):
+        cells = " ".join(f"{by_width[width][n]:>5.3f}" for n in swept_lengths)
+        print(f"{width:>5} {cells}")
+    print()
 
 
 if __name__ == "__main__":

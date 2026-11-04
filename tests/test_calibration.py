@@ -1,5 +1,6 @@
 """Tests for the calibration experiment: reproducibility and the power curve."""
 
+import random
 import sys
 from pathlib import Path
 
@@ -9,6 +10,7 @@ import pytest
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from experiments.min_tokens import (  # noqa: E402
+    _watermarked_text,
     analytic_min_tokens,
     measured_min_tokens,
     sweep,
@@ -90,3 +92,21 @@ def test_sweep_unwatermarked_arm_stays_below_threshold() -> None:
     )
     for row in results:
         assert row["fpr"] <= 0.05
+
+
+def test_watermarked_arm_produces_distinct_samples() -> None:
+    """The watermarked arm is a genuine sample, not one text repeated.
+
+    The seeded candidate pool must produce distinct texts across samples:
+    a deterministic pool would make the TPR column a single sample repeated
+    1,000 times, which is the defect the 0.4 fix removed. Reproducibility
+    (same seed, same results) is a separate property and is pinned by
+    test_sweep_reproduces_measured_minimum_from_fixed_seed.
+    """
+    key = generate_key()
+    rng = random.Random(42)
+    texts = {
+        _watermarked_text(key, 26, rng=rng)
+        for _ in range(20)
+    }
+    assert len(texts) == 20
