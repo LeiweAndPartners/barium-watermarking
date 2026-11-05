@@ -42,7 +42,7 @@ green list  = first floor(γ × V) entries   (γ = 0.5)</pre>
 
 <p>Seed: <span class="mono" id="seedOut">—</span> · Green list size: <span class="mono" id="sizeOut">—</span> of <span class="mono">V = 50</span></p>
 <div class="grid" id="grid"></div>
-<p class="note">A 50-token stand-in vocabulary. Green entries are the first floor(γ × V) of the seeded permutation; the rest are red. In the real package V = 50,000.</p>
+<p class="note">A 50-token stand-in vocabulary. Green entries are the first floor(γ × V) of the seeded permutation; the rest are red. In the real package V = 50,000. The shuffle here is Fisher-Yates with a mulberry32 PRNG, a stand-in for the package's <span class="mono">random.Random(seed).sample</span> construction: the displayed split illustrates the mechanism and will not match what the package produces for the same key and token.</p>
 
 <p><strong>Why this matters for detection:</strong> the detector holds the key and the previous token, so it re-derives the same green list and checks membership. Without the key, the split is unpredictable — which is the whole security property.</p>
 

@@ -84,7 +84,7 @@ The 25-token headline holds only for w ≥ 5. At w = 2, a quarter of positions o
 ## Reproducing
 
 ```
-.venv/bin/python experiments/min_tokens.py
+python experiments/min_tokens.py
 ```
 
-The sweep seeds the unwatermarked arm from a fixed seed; the watermarked arm is deterministic given the key (the demo embedder's selection is deterministic). The reproducibility test in `tests/test_calibration.py` pins the measured minimum from a fixed seed. The width sweep runs in the same script and prints the TPR table by width and length; each (width, length) cell derives its own seed, so the table reproduces independently of sweep order.
+Run from the repository root with the package importable (a clone with `pip install .`, or any environment where `barium` is on the path). The sweep seeds the unwatermarked arm from a fixed seed; the watermarked arm is deterministic given the key (the demo embedder's selection is deterministic). The reproducibility test in `tests/test_calibration.py` pins the measured minimum from a fixed seed. The width sweep runs in the same script and prints the TPR table by width and length; each (width, length) cell derives its own seed, so the table reproduces independently of sweep order.

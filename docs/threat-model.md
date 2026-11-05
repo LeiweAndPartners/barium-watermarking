@@ -1,6 +1,6 @@
 # Threat Model
 
-*The key is the attack surface. Extracted from arXiv:2301.10226 §5 and §7 and Sadasivan et al. (arXiv:2303.11156); every number traces to `docs/plans/post3-plan.md` or `docs/min-tokens.md`.*
+*The key is the attack surface. Extracted from arXiv:2301.10226 §5 and §7 and Sadasivan et al. (arXiv:2303.11156); every number traces to `docs/min-tokens.md` or the cited papers.*
 
 ## The key is the attack surface
 
@@ -41,4 +41,4 @@ For $k = 4$ keys and a family-wise FPR of $3 \times 10^{-5}$, each detector runs
 
 - **SynthID Text.** Barium detects the open green-list scheme only; SynthID's detector is a trained classifier tied to a private config, and its threat model is the provider's, not this package's.
 - **Arbitrary AI-text detection.** No statistical watermark detector identifies "AI text" in general; barium identifies one scheme's mark.
-- **Metadata stripping.** C2PA-style provenance in metadata is trivially strippable by copy-paste; in-content watermarking survives it. That is post 1 of the series' two-layers point, not this package's scope.
+- **Metadata stripping.** C2PA-style provenance in metadata is trivially strippable by copy-paste; in-content watermarking survives it. That is the two-layers point of the EU AI Act watermarking series, not this package's scope.

@@ -33,7 +33,7 @@
   <div class="msg req"><span class="mono">client → server</span><pre>{"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}}</pre></div>
   <div class="msg res"><span class="mono">server → client</span><pre>{"jsonrpc": "2.0", "id": 2, "result": {"tools": [detect_watermark, generate_key, selftest]}}</pre></div>
   <div class="msg req"><span class="mono">client → server</span><pre>{"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {"name": "detect_watermark", "arguments": {"text": "some text", "key": 123456789}}}</pre></div>
-  <div class="msg res"><span class="mono">server → client</span><pre>{"jsonrpc": "2.0", "id": 3, "result": {"content": [{"type": "text", "text": "{\"num_tokens_scored\": 6, ...}"}]}}</pre></div>
+  <div class="msg res"><span class="mono">server → client</span><pre>{"jsonrpc": "2.0", "id": 3, "result": {"content": [{"type": "text", "text": "{\"num_tokens_scored\": 1, ...}"}]}}</pre></div>
 </div>
 
 <p><strong>The three rules the implementation follows:</strong></p>
