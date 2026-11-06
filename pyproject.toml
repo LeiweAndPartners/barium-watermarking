@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "barium-watermarking"
-version = "0.2.0"
+version = "0.2.1"
 description = "A detection tool for the open green-list scheme - not a SynthID tool"
 readme = "README.md"
 requires-python = ">=3.10"
