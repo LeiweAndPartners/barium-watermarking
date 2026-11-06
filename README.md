@@ -125,10 +125,17 @@ The key must be the same at generation and detection, or the green lists will no
 
 ### Harvesting candidates from a served model
 
-Path 1 needs candidate next-token probabilities. A served model gives them through the OpenAI-compatible logprobs fields: request `logprobs: true, top_logprobs: N` and each generated position returns its top-N candidates with log-probabilities. Those pairs are exactly the `(token, probability)` lists the demo embedder takes, with no model weights, no torch, no logit access:
+Path 1 needs candidate next-token probabilities. A served model gives them through the OpenAI-compatible logprobs fields: request `logprobs: true, top_logprobs: N` and each generated position returns its top-N candidates with log-probabilities. Those pairs are exactly the `(token, probability)` lists the demo embedder takes, with no model weights, no torch, no logit access. Barium never talks to the API itself — the harvesting is caller-side code, and the endpoint goes in the OpenAI client's `base_url`:
 
 ```python
 import math
+
+from openai import OpenAI
+
+client = OpenAI(
+    base_url="http://your-server:8000/v1",  # your served model's endpoint
+    api_key="your-key",                     # local servers (vLLM, llama.cpp) accept any non-empty string
+)
 
 response = client.chat.completions.create(
     model="your-model",
@@ -142,6 +149,8 @@ candidates = [
 ]
 watermarked = embedder.embed(candidates)
 ```
+
+The `openai` package is a harvesting-side dependency only — barium stays stdlib-only and never imports it.
 
 Why not the alternatives:
 
