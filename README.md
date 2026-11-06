@@ -11,6 +11,7 @@ A standalone, local-first, zero-hosting toolkit for Kirchenbauer-style green-lis
 - [Usage](#usage)
 - [How detection works](#how-detection-works)
 - [How embedding works](#how-embedding-works)
+- [Where this runs in your stack](#where-this-runs-in-your-stack)
 - [MCP server](#mcp-server)
 - [Honesty notes](#honesty-notes)
 - [Architecture](#architecture)
@@ -122,6 +123,31 @@ detector.is_green("the", "time")   # True when "time" is green after "the"
 ```
 
 The key must be the same at generation and detection, or the green lists will not match. See [How embedding works](#how-embedding-works) for the mechanics and the boundary on tokenisation.
+
+### Where this runs in your stack
+
+Barium is a library, not a service: there is no embed server and no barium process to run alongside your model. The embedding call lives **inside your own code**, at the point where your stack decides what the next token is. Two shapes cover every deployment:
+
+**Shape 1 — inline in your generation loop.** If your application calls a served model directly, embed between the API response and the text you show the user. The candidates come from the response; the watermarked text replaces the raw one:
+
+```python
+# Inside your application, wherever you call the model:
+response = client.chat.completions.create(
+    model="your-model",
+    messages=[{"role": "user", "content": prompt}],
+    logprobs=True,
+    top_logprobs=20,
+)
+candidates = harvest_top_logprobs(response.model_dump())
+watermarked = embedder.embed(candidates)   # barium biases the selection
+reply = watermarked                        # serve this instead of response text
+```
+
+One caveat: the demo embedder selects the highest-boosted candidate, so the watermarked text is barium's selection over the model's top-N — not the model's own sampled continuation. That is the demo label's meaning: the watermarking is real, the generation is a selection over your candidates.
+
+**Shape 2 — a standalone harvesting script.** If you cannot change the application (a third-party chat UI, a batch job), run a script of yours that calls the model, harvests candidates, embeds, and writes the watermarked text wherever the application reads it. The script imports barium exactly as above; nothing about barium runs as a daemon or a sidecar.
+
+Either way the same key must reach your detector at scoring time — see [How detection works](#how-detection-works). Detection needs no model access at all: `barium detect article.txt --key ...` runs anywhere, including offline.
 
 ### Harvesting candidates from a served model
 
