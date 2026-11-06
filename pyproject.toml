@@ -8,13 +8,13 @@ version = "0.1.0"
 description = "A detection tool for the open green-list scheme - not a SynthID tool"
 readme = "README.md"
 requires-python = ">=3.10"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "Leiwe & Partners" }]
 keywords = ["watermarking", "llm", "detection", "green-list", "kirchenbauer"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
-    "License :: OSI Approved :: MIT License",
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
@@ -31,12 +31,19 @@ dependencies = []
 [project.optional-dependencies]
 dev = ["pytest>=8.0"]
 
+[project.urls]
+Repository = "https://github.com/LeiweAndPartners/barium-watermarking"
+Issues = "https://github.com/LeiweAndPartners/barium-watermarking/issues"
+
 [project.scripts]
 barium = "barium.cli:main"
 barium-mcp = "barium.mcp_server:main"
 
 [tool.setuptools]
 packages = ["barium"]
+
+[tool.setuptools.package-data]
+barium = ["py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

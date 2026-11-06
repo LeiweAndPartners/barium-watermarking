@@ -102,9 +102,13 @@ def _tool_selftest(arguments: dict[str, object]) -> dict[str, object]:
     """Run the selftest tool."""
     key = arguments.get("key")
     num_tokens = arguments.get("num_tokens", 200)
+    if key is not None and (not isinstance(key, int) or isinstance(key, bool)):
+        raise ValueError("key must be an integer")
+    if not isinstance(num_tokens, int) or isinstance(num_tokens, bool):
+        raise ValueError("num_tokens must be an integer")
     outcome = run_selftest(
-        int(key) if key is not None else generate_key(),
-        num_tokens=int(num_tokens),
+        key if key is not None else generate_key(),
+        num_tokens=num_tokens,
     )
     result = outcome["result"]
     return {
@@ -166,6 +170,11 @@ def handle_request(request: dict[str, object]) -> dict[str, object] | None:
                 "serverInfo": {"name": "barium", "version": __version__},
             },
         }
+
+    if method == "ping":
+        # JSON-RPC 2.0 spec ping: an empty result, so clients can probe
+        # liveness without invoking a tool.
+        return {"jsonrpc": "2.0", "id": request_id, "result": {}}
 
     if method == "tools/list":
         return {

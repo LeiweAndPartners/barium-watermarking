@@ -96,18 +96,28 @@ def build_parser() -> argparse.ArgumentParser:
 
 def _read_target(target: str) -> str:
     """Return the text to score: file contents when the target is a path,
-    the target itself otherwise."""
+    the target itself otherwise.
+
+    A directory is rejected rather than read: Path.read_text on a directory
+    raises IsADirectoryError, which would surface as a traceback instead of
+    a clean error message.
+    """
     path = Path(target)
+    if path.is_dir():
+        raise SystemExit(f"barium: {target} is a directory, not a text file")
     if path.is_file():
         return path.read_text(encoding="utf-8")
     return target
 
 
 def _detect(args: argparse.Namespace) -> int:
-    """Run the detect subcommand and print the test statistics."""
+    """Run the detect subcommand and print the test statistics.
+
+    The key is not echoed: it is secret material, and the detect output can
+    end up in logs or shared transcripts.
+    """
     detector = GreenListDetector(args.key, z_threshold=args.z_threshold)
     result = detector.detect(_read_target(args.target))
-    print(f"key: {args.key}")
     print(f"tokens scored: {result.num_tokens_scored}")
     print(f"green tokens: {result.num_green_tokens}")
     print(f"green fraction: {result.green_fraction:.3f}")
@@ -129,12 +139,15 @@ def _keygen() -> int:
 
 
 def _selftest(args: argparse.Namespace) -> int:
-    """Run the selftest subcommand and print the round-trip statistics."""
+    """Run the selftest subcommand and print the round-trip statistics.
+
+    The key is not echoed: it is secret material, and the selftest output
+    can end up in logs or shared transcripts.
+    """
     key = args.key if args.key is not None else generate_key()
     outcome = run_selftest(key, num_tokens=args.tokens)
     result = outcome["result"]
     print("embedder: demo (reference demo, not production generation)")
-    print(f"key: {key}")
     print(f"tokens scored: {result.num_tokens_scored}")
     print(f"green tokens: {result.num_green_tokens}")
     print(f"z-score: {result.z_score:.3f}")

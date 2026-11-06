@@ -45,7 +45,6 @@ class DemoEmbedder:
     def embed(
         self,
         candidates: list[list[tuple[str, float]]],
-        seed: int = 0,
     ) -> str:
         """Select one token per position from candidate probabilities.
 
@@ -66,8 +65,6 @@ class DemoEmbedder:
             candidates: Candidate next-token probabilities, one list of
                 (token, probability) pairs per position. Tokens may be raw
                 model tokens; they are normalised internally.
-            seed: Unused; kept for API symmetry. Selection is deterministic
-                given the candidates.
 
         Returns:
             The watermarked text: the normalised selected tokens joined with
@@ -88,7 +85,7 @@ class DemoEmbedder:
             previous = tokens[-1]
             green = self.detector.green_list(previous)
             tokens.append(
-                max(normalised, key=lambda pair: self._boosted(pair, green))[0]
+                max(normalised, key=lambda pair: self.boosted(pair, green))[0]
             )
         return " ".join(tokens)
 
@@ -115,11 +112,13 @@ class DemoEmbedder:
                 best[key] = probability
         return list(best.items())
 
-    def _boosted(self, pair: tuple[str, float], green: frozenset[int]) -> float:
+    def boosted(self, pair: tuple[str, float], green: frozenset[int]) -> float:
         """Return the boosted probability for one (token, probability) pair.
 
         The soft rule: green candidates are boosted by delta, red candidates
-        keep their probability.
+        keep their probability. Public because the boost rule is part of the
+        embedder's contract, not an implementation detail: a caller building
+        its own selection loop over the same candidates needs the same rule.
         """
         token, probability = pair
         if self.detector._token_id(token) in green:
@@ -127,7 +126,7 @@ class DemoEmbedder:
         return probability
 
 
-def selftest(key: int, num_tokens: int = 200, seed: int = 0) -> dict[str, object]:
+def selftest(key: int, num_tokens: int = 200) -> dict[str, object]:
     """Embed then detect in one pass: the round-trip proof.
 
     Builds a high-entropy candidate pool, embeds a watermarked text with the
@@ -136,7 +135,6 @@ def selftest(key: int, num_tokens: int = 200, seed: int = 0) -> dict[str, object
     Args:
         key: Per-deployment secret key.
         num_tokens: Target length of the embedded text.
-        seed: Unused; kept for API symmetry. Selection is deterministic.
 
     Returns:
         A dict with the embedded text and the DetectionResult statistics.
@@ -154,6 +152,18 @@ def selftest(key: int, num_tokens: int = 200, seed: int = 0) -> dict[str, object
     }
 
 
+# The demo pool's word list, shared with experiments/min_tokens.py so the
+# calibration and the selftest measure the same high-entropy setting.
+DEMO_WORDS: tuple[str, ...] = (
+    "time year people way day man thing woman life child world school "
+    "state family student group country problem hand part place case "
+    "week company system program question work government number night "
+    "point home water room mother area money story fact month lot right "
+    "study book eye job word business issue side kind head house service "
+    "friend father power hour game line end member law car city community"
+).split()
+
+
 def _candidate_pool(num_tokens: int) -> list[list[tuple[str, float]]]:
     """Build a high-entropy candidate pool for the demo embed.
 
@@ -163,13 +173,5 @@ def _candidate_pool(num_tokens: int) -> list[list[tuple[str, float]]]:
     to. Probabilities are near-uniform so the delta boost, not the base
     probability, decides the selection.
     """
-    words = (
-        "time year people way day man thing woman life child world school "
-        "state family student group country problem hand part place case "
-        "week company system program question work government number night "
-        "point home water room mother area money story fact month lot right "
-        "study book eye job word business issue side kind head house service "
-        "friend father power hour game line end member law car city community"
-    ).split()
-    probability = 1.0 / len(words)
-    return [[(word, probability) for word in words] for _ in range(num_tokens)]
+    probability = 1.0 / len(DEMO_WORDS)
+    return [[(word, probability) for word in DEMO_WORDS] for _ in range(num_tokens)]

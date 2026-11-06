@@ -84,13 +84,15 @@ def test_selftest_output_labels_embedder_demo(capsys) -> None:
 
 
 def test_selftest_with_explicit_key(capsys) -> None:
-    """An explicit key is used and echoed in the output."""
+    """An explicit key is used and not echoed in the output: the key is
+    secret material and the output can end up in logs or transcripts."""
     from barium.keygen import generate_key
 
     key = generate_key()
     barium.cli.main(["selftest", "--key", str(key), "--tokens", "50"])
     output = capsys.readouterr().out
-    assert f"key: {key}" in output
+    assert str(key) not in output
+    assert "tokens scored:" in output
 
 
 def test_detect_with_custom_z_threshold(capsys) -> None:
