@@ -9,4 +9,4 @@ The z-score is a false-positive rate, not a certainty percentage. Short or
 low-entropy text carries no signal.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
