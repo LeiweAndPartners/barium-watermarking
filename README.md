@@ -125,12 +125,18 @@ The key must be the same at generation and detection, or the green lists will no
 
 ### Harvesting candidates from a served model
 
-Path 1 needs candidate next-token probabilities. A served model gives them through the OpenAI-compatible logprobs fields: request `logprobs: true, top_logprobs: N` and each generated position returns its top-N candidates with log-probabilities. Those pairs are exactly the `(token, probability)` lists the demo embedder takes, with no model weights, no torch, no logit access. Barium never talks to the API itself — the harvesting is caller-side code, and the endpoint goes in the OpenAI client's `base_url`:
+Path 1 needs candidate next-token probabilities. A served model gives them through the OpenAI-compatible logprobs fields: request `logprobs: true, top_logprobs: N` and each generated position returns its top-N candidates with log-probabilities. `harvest_top_logprobs` turns that response into the `(token, probability)` lists the demo embedder takes — one function from a served model to watermarked text, with no model weights, no torch, no logit access. Barium never talks to the API itself — the request, the endpoint, and the client are yours; the endpoint goes in the OpenAI client's `base_url`:
 
 ```python
-import math
-
 from openai import OpenAI
+
+from barium.detector import GreenListDetector
+from barium.embedder import DemoEmbedder
+from barium.harvest import harvest_top_logprobs
+
+key = 123456789   # from barium keygen; the same key at generation and detection
+detector = GreenListDetector(key)
+embedder = DemoEmbedder(detector)
 
 client = OpenAI(
     base_url="http://your-server:8000/v1",  # your served model's endpoint
@@ -143,14 +149,11 @@ response = client.chat.completions.create(
     logprobs=True,
     top_logprobs=20,
 )
-candidates = [
-    [(entry.token, math.exp(entry.logprob)) for entry in position.top_logprobs]
-    for position in response.choices[0].logprobs.content
-]
+candidates = harvest_top_logprobs(response.model_dump())
 watermarked = embedder.embed(candidates)
 ```
 
-The `openai` package is a harvesting-side dependency only — barium stays stdlib-only and never imports it.
+The helper takes the parsed response body — `response.model_dump()` (openai client) or `response.json()` (httpx/requests) — and converts the API's log-probabilities to probabilities. The `openai` package is a harvesting-side dependency only — barium stays stdlib-only and never imports it.
 
 Why not the alternatives:
 
