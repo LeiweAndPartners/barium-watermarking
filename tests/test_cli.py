@@ -95,7 +95,7 @@ def test_selftest_with_explicit_key(capsys) -> None:
     assert "tokens scored:" in output
 
 
-def test_detect_with_custom_z_threshold(capsys) -> None:
+def test_detect_with_custom_z_threshold(capsys, tmp_path) -> None:
     """A custom --z-threshold is honoured in the verdict and echoed in output."""
     from barium.detector import GreenListDetector
     from barium.embedder import DemoEmbedder
