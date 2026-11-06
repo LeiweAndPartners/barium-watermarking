@@ -154,6 +154,13 @@ def selftest(key: int, num_tokens: int = 200) -> dict[str, object]:
 
 # The demo pool's word list, shared with experiments/min_tokens.py so the
 # calibration and the selftest measure the same high-entropy setting.
+#
+# Hard-coded on purpose: a stdlib-only demo needs no configurable pool, and
+# the calibration tables in docs/min-tokens.md are traced to this exact list
+# (67 words). Editing it silently shifts every traced number — the
+# width-sensitivity table, the p = 1.00 ceiling, the low-entropy floor —
+# without breaking a single test. Regenerate the tables after any change
+# here (python experiments/min_tokens.py), and say so in the changelog.
 DEMO_WORDS: tuple[str, ...] = (
     "time year people way day man thing woman life child world school "
     "state family student group country problem hand part place case "

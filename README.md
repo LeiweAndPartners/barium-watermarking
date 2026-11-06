@@ -147,7 +147,7 @@ Why not the alternatives:
 
 - No full logit vector over HTTP. vLLM and the OpenAI-compatible servers expose sampled tokens and top-k logprobs, not the raw next-token distribution, so Path 2's logits biasing is not reachable through the API.
 - `logit_bias` is the right concept at the wrong layer. It biases at request time, needs the previous token (one request per generated token), and caps at 300 entries; a green list is half the vocabulary.
-- `top_logprobs` is capped. vLLM rejects N above its `max_logprobs` engine setting (20 by default) with a 400. 20 candidates per position is enough: the probability that a position offers no green candidate is (1 − γ)^w, about 10⁻⁶ at w = 20, and the measured 25-token minimum holds for w ≥ 5 (see [docs/min-tokens.md](docs/min-tokens.md)).
+- `top_logprobs` is capped. vLLM rejects N above its `max_logprobs` engine setting (20 by default) with a 400. 20 candidates per position is enough: the probability that a position offers no green candidate is (1 − γ)^w, about 10⁻⁶ at w = 20, and the measured 25-token minimum is safe for w ≥ 8 (w = 5 is borderline; see [docs/min-tokens.md](docs/min-tokens.md)).
 
 ## MCP server
 

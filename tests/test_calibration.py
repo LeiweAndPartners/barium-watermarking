@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from experiments.min_tokens import (  # noqa: E402
     _watermarked_text,
     analytic_min_tokens,
+    measure_low_entropy_green_rate,
     measured_min_tokens,
     sweep,
 )
@@ -33,14 +34,29 @@ def test_analytic_min_tokens_grows_as_p_approaches_gamma() -> None:
     expectation - the low-entropy cap (Appendix G) in formula form.
 
     p = 0.503 gives T_min = (5.6449)^2 * 0.25 / 0.003^2 = 885,121: effectively
-    undetectable at any realistic length. The measured low-entropy rate in
-    docs/min-tokens.md is 0.5025, for which the formula gives ~1.27 million;
-    at p = 0.50 exactly the formula diverges entirely.
+    undetectable at any realistic length. At p = 0.50 exactly the formula
+    diverges entirely, which is the low-entropy floor's expected rate.
     """
     near = analytic_min_tokens(green_rate=0.503, z_threshold=4.0, target_tpr=0.95)
     far = analytic_min_tokens(green_rate=1.0, z_threshold=4.0, target_tpr=0.95)
     assert near > 500_000
     assert far < 100
+
+
+def test_low_entropy_green_rate_is_a_per_key_bernoulli_at_gamma() -> None:
+    """The low-entropy floor's green rate is a per-key Bernoulli at gamma.
+
+    With one candidate per position the chain repeats a single bigram, so the
+    realised green rate is is_green(token, token) - a per-key constant, 0 or
+    1. The fraction of green keys over a large set estimates the Bernoulli's
+    mean, gamma. The bound is a deliberate anti-flake margin, not the
+    binomial band: over 1,000 keys the sd is about 0.016, so 0.483 (the
+    pinned seed's value) sits within 2 sd of 0.5 and the loose 0.35-0.65
+    bound exists only so a broken measurement (which would return 0.0, 1.0,
+    or a non-Bernoulli rate) cannot pass.
+    """
+    rate = measure_low_entropy_green_rate()
+    assert 0.35 <= rate <= 0.65
 
 
 def test_sweep_reproduces_measured_minimum_from_fixed_seed() -> None:

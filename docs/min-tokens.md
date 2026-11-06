@@ -1,12 +1,12 @@
 # Minimum Detectable Length
 
-*Calibration results for the barium detector, from `experiments/min_tokens.py`. Every number here traces to experiment output; the watermarked arm is deterministic given the key and the unwatermarked arm is seeded, so the tables reproduce in practice. The z-score is a false-positive rate, not a certainty: a threshold of z = 4 means unwatermarked text exceeds it with probability about 3×10⁻⁵.*
+*Calibration results for the barium detector, from `experiments/min_tokens.py`. Every number here traces to experiment output; both sweep arms are seeded, so the tables reproduce in practice. The z-score is a false-positive rate, not a certainty: a threshold of z = 4 means unwatermarked text exceeds it with probability about 3×10⁻⁵.*
 
 ## Setup
 
 The sweep runs 1,000 watermarked and 1,000 unwatermarked samples at each length T ∈ {10, 16, 25, 32, 50, 64, 100, 128, 200, 400} scored tokens, and reports the empirical true-positive rate (TPR) at the threshold. The false-positive rate (FPR) is fixed by the threshold itself, so the unwatermarked arm validates the empirical rate against the nominal one.
 
-Watermarked samples come from the demo embedder over a high-entropy candidate pool (70 common English words per position, near-uniform probabilities). The embedder's measured green rate on this pool is **p = 1.00**: with near-uniform candidates and δ = 2.0, the boosted green candidate wins every position, so every scored token is green. This is the ceiling case — real generation with a language model lands well below it, which is consistent with the paper's empirical detection at 200 tokens being 98.4% rather than 100%.
+Watermarked samples come from the demo embedder over a high-entropy candidate pool (67 common English words per position, near-uniform probabilities). The embedder's measured green rate on this pool is **p = 1.00**: with near-uniform candidates and δ = 2.0, the boosted green candidate wins every position, so every scored token is green. This is the ceiling case — real generation with a language model lands well below it, which is consistent with the paper's empirical detection at 200 tokens being 98.4% rather than 100%.
 
 ## The analytic power curve
 
@@ -57,29 +57,29 @@ At z = 2.326 the measured minimum is also 25, and the reason is the detector's o
 
 ## High-entropy vs low-entropy
 
-Low entropy caps the achievable green rate p, matching Kirchenbauer Appendix G: when the candidate distribution has little flexibility, the embedder cannot prefer green tokens because there is nothing to prefer between. A two-candidate pool (near-uniform probabilities) measures p = 0.5025 — a hair above the fair-coin expectation. The analytic minimum at that measured rate is **~1.27 million scored tokens at z = 4** and **~631 thousand at z = 2.326**: effectively undetectable at any realistic length. At p = 0.50 exactly the formula diverges entirely.
+Low entropy caps the achievable green rate p, matching Kirchenbauer Appendix G: when the candidate distribution has little flexibility, the embedder cannot prefer green tokens because there is nothing to prefer between. For this embedder the cap is reached by removing the alternatives entirely, not by skewing their probabilities: the δ = 2.0 boost dominates any probability split, so a two-candidate pool with a strong preference still measures p near 0.75–0.81. The genuine floor is one candidate per position, where the embedder has no choice at all. There the chain repeats a single bigram, so the realised green rate is a per-key constant — 0 or 1, decided by whether that one bigram lands green for the key. Measured over 1,000 keys (seed 20,000), 48.3% of keys land green: the rate is a per-key Bernoulli at γ, γ = 0.5 in expectation. The analytic minimum at p = γ = 0.50 diverges entirely — **no measurable minimum at any length** — and at any realised per-key rate the text is either fully watermarked (p = 1) or carries no signal (p = 0). Averaging over positions within one text buys nothing, because the bigram never changes.
 
 This is the honest version of the paper's "as few as 25 tokens" claim: it holds for high-entropy text, where the model has real freedom to prefer green tokens. Low-entropy text — prescriptive answers, code, factual completions (the paper's own low-entropy example is code) — carries no reliable signal at any length a detector will see. The detector's inconclusive verdict below 25 scored tokens exists so short texts are reported as "no signal available" rather than flagged.
 
 ## Width sensitivity: the minimum is a diversity claim
 
-The tables above hold for the calibration's 10-candidate pool. The minimum detectable length also depends on candidate width w — how many candidates each position offers — not just on text length. The mechanism: the probability that a position offers no green candidate is (1 − γ)^w, so at narrow widths a sizeable fraction of positions is unwatermarkable and the realised green rate collapses toward γ. Measured TPR at z = 4 (100 samples per cell, key 123456789, seed 42):
+The tables above hold for the calibration's 10-candidate pool. The minimum detectable length also depends on candidate width w — how many candidates each position offers — not just on text length. The mechanism: the probability that a position offers no green candidate is (1 − γ)^w, so at narrow widths a sizeable fraction of positions is unwatermarkable and the realised green rate collapses toward γ. Measured TPR at z = 4 (100 samples per cell, key 123456789, seed 42, the current 67-word pool):
 
 | width w | T=25 | T=50 | T=100 | T=200 |
 |---|---|---|---|---|
-| 2 | 0.050 | 0.270 | 0.870 | 1.000 |
-| 3 | 0.310 | 0.970 | 1.000 | 1.000 |
-| 4 | 0.790 | 1.000 | 1.000 | 1.000 |
-| 5 | 0.980 | 1.000 | 1.000 | 1.000 |
+| 2 | 0.040 | 0.240 | 0.880 | 1.000 |
+| 3 | 0.350 | 0.960 | 1.000 | 1.000 |
+| 4 | 0.780 | 1.000 | 1.000 | 1.000 |
+| 5 | 0.940 | 1.000 | 1.000 | 1.000 |
 | 8–10 | 1.000 | 1.000 | 1.000 | 1.000 |
 
-The 25-token headline holds only for w ≥ 5. At w = 2, a quarter of positions offer no green candidate, and the 25-token TPR collapses to 0.050 — the text is effectively undetectable at that length even though it is long enough. Length alone is not the detectability claim; candidate diversity is the other half of it. This is the regime of a served model's `top_logprobs` output: the README's harvesting path supplies candidates of width N, and N ≥ 5 keeps the 25-token minimum (see [Harvesting candidates from a served model](../README.md#harvesting-candidates-from-a-served-model)).
+The 25-token headline is safe only for w ≥ 8; w = 5 is borderline (0.940, just under the 95% bar), and w = 4 falls short of it (0.780). At w = 2, a quarter of positions offer no green candidate, and the 25-token TPR collapses to 0.040 — the text is effectively undetectable at that length even though it is long enough. Length alone is not the detectability claim; candidate diversity is the other half of it. This is the regime of a served model's `top_logprobs` output: the README's harvesting path supplies candidates of width N, and N ≥ 8 keeps the 25-token minimum (see [Harvesting candidates from a served model](../README.md#harvesting-candidates-from-a-served-model)).
 
 ## In words
 
 - **25 scored tokens** is the measured minimum for 95% TPR at z = 4 (FPR ~3×10⁻⁵) on high-entropy text — **25 words** at barium's whitespace tokenisation (1 token per word in this pool).
 - **25 scored tokens** is also the minimum at FPR ≤ 1% (z = 2.326) on the same pool; the looser threshold buys no length reduction here because the signal is already saturated at p = 1.00 and the detector's inconclusive floor sits at 25.
-- **Low-entropy text**: no measurable minimum — the green rate collapses to a hair above the fair-coin expectation and the analytic minimum exceeds a million tokens.
+- **Low-entropy text**: no measurable minimum — with one candidate per position the green rate is a per-key Bernoulli at γ (0 or 1 per key, γ in expectation) and the analytic minimum diverges entirely.
 
 ## Reproducing
 
@@ -87,4 +87,4 @@ The 25-token headline holds only for w ≥ 5. At w = 2, a quarter of positions o
 python experiments/min_tokens.py
 ```
 
-Run from the repository root with the package importable (a clone with `pip install .`, or any environment where `barium` is on the path). The sweep seeds the unwatermarked arm from a fixed seed; the watermarked arm is deterministic given the key (the demo embedder's selection is deterministic). The reproducibility test in `tests/test_calibration.py` pins the measured minimum from a fixed seed. The width sweep runs in the same script and prints the TPR table by width and length; each (width, length) cell derives its own seed, so the table reproduces independently of sweep order.
+Run from the repository root with the package importable (a clone with `pip install .`, or any environment where `barium` is on the path). Both sweep arms are seeded — the watermarked arm draws its candidate pools from the sweep seed, the unwatermarked arm samples filler words from per-sample seeds — so the tables reproduce. The reproducibility test in `tests/test_calibration.py` pins the measured minimum from a fixed seed. The width sweep runs in the same script and prints the TPR table by width and length; each (width, length) cell derives its own seed, so the table reproduces independently of sweep order. The script also prints the low-entropy floor: the fraction of keys whose single-bigram chain is green, the empirical estimate of the per-key Bernoulli at γ.

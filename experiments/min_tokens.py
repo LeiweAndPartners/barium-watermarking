@@ -49,6 +49,9 @@ SAMPLES_PER_ARM = 1_000
 # Thresholds: z = 4 (FPR about 3e-5) and z = 2.326 (FPR about 1%).
 Z_THRESHOLDS = (4.0, 2.326)
 
+# The calibration pool is the embedder's own word list, so the selftest and
+# the tables in docs/min-tokens.md measure the same setting. The tables are
+# traced to the current list; a pool edit invalidates them (see DEMO_WORDS).
 _WORDS = DEMO_WORDS
 
 
@@ -116,17 +119,21 @@ def _unwatermarked_text(num_tokens: int, seed: int) -> str:
     return " ".join(rng.choice(_WORDS) for _ in range(num_tokens))
 
 
-def measure_green_rate(key: int, num_tokens: int = 200) -> float:
+def measure_green_rate(
+    key: int, num_tokens: int = 200, width: int | None = None
+) -> float:
     """Measure the embedder's realised green rate p on high-entropy text.
 
     The analytic power curve needs the green rate the embedder actually
     achieves, not the gamma it biases toward: the demo embedder selects the
     highest-boosted candidate, so p sits well above gamma on high-entropy
-    pools.
+    pools. The optional width caps how many candidates each position offers,
+    the way a model's top-k logprobs behave; the default keeps the
+    calibration's 10-candidate pool.
     """
     detector = GreenListDetector(key)
     embedder = DemoEmbedder(detector)
-    text = embedder.embed(_candidate_lists(num_tokens))
+    text = embedder.embed(_candidate_lists(num_tokens, width=width))
     tokens = tokenize(text)
     green = sum(
         1
@@ -134,6 +141,41 @@ def measure_green_rate(key: int, num_tokens: int = 200) -> float:
         if detector.is_green(previous, current)
     )
     return green / (len(tokens) - 1)
+
+
+def measure_low_entropy_green_rate(keys: int = 1_000, seed: int = 20_000) -> float:
+    """Measure the green rate on the low-entropy floor: one candidate per
+    position.
+
+    A single candidate leaves the embedder no choice at any position, so the
+    realised green rate is whatever the pool gives — the low-entropy cap
+    (Kirchenbauer Appendix G) in its purest form for this embedder. Narrower
+    probability distributions do not reach this floor: the delta boost
+    dominates any probability split, so a two-candidate pool with a strong
+    preference still measures p near 0.75. Only removing the alternatives
+    entirely does.
+
+    With one candidate per position the chain repeats a single bigram, so the
+    realised green rate is is_green(token, token) — a per-key constant, 0 or
+    1, decided by whether that one bigram lands green for the key. The rate
+    over a key set is therefore a Bernoulli at gamma: gamma in expectation,
+    with no averaging benefit within a single text. This function reports the
+    fraction of keys whose chain is green, the empirical estimate of that
+    Bernoulli's mean.
+
+    Args:
+        keys: Number of keys to average over.
+        seed: Seed for the key set, so the rate reproduces.
+
+    Returns:
+        The fraction of keys whose single-bigram chain is green.
+    """
+    green_keys = 0
+    for i in range(keys):
+        detector = GreenListDetector(seed + i)
+        if detector.is_green("token", "token"):
+            green_keys += 1
+    return green_keys / keys
 
 
 def analytic_min_tokens(
@@ -305,6 +347,12 @@ def main() -> None:
     for width in sorted(by_width):
         cells = " ".join(f"{by_width[width][n]:>5.3f}" for n in swept_lengths)
         print(f"{width:>5} {cells}")
+    print()
+
+    low_entropy_rate = measure_low_entropy_green_rate()
+    print(f"low-entropy floor (one candidate per position): p = {low_entropy_rate:.4f}")
+    print("  (a per-key Bernoulli at gamma: 0 or 1 per key, gamma in expectation;")
+    print("   the analytic minimum at p = gamma diverges entirely)")
     print()
 
 
