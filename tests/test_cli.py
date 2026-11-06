@@ -102,7 +102,10 @@ def test_detect_with_custom_z_threshold(capsys) -> None:
     from barium.keygen import generate_key
 
     # Build a genuinely watermarked text, then detect it at a threshold no
-    # honest z-score can miss and at one no honest z-score can pass.
+    # honest z-score can miss and at one no honest z-score can pass. The
+    # text is written to a file rather than passed inline: a 60-token text
+    # exceeds the filename length limit on some filesystems, and the CLI
+    # treats a non-path target as inline text.
     key = generate_key()
     detector = GreenListDetector(key)
     embedder = DemoEmbedder(detector)
@@ -112,11 +115,13 @@ def test_detect_with_custom_z_threshold(capsys) -> None:
     ).split()
     candidates = [[(w, 1.0 / len(words)) for w in words] for _ in range(60)]
     text = embedder.embed(candidates)
+    text_file = tmp_path / "watermarked.txt"
+    text_file.write_text(text, encoding="utf-8")
 
-    barium.cli.main(["detect", text, "--key", str(key), "--z-threshold", "0.1"])
+    barium.cli.main(["detect", str(text_file), "--key", str(key), "--z-threshold", "0.1"])
     output = capsys.readouterr().out
     assert "verdict: watermarked" in output
 
-    barium.cli.main(["detect", text, "--key", str(key), "--z-threshold", "1000"])
+    barium.cli.main(["detect", str(text_file), "--key", str(key), "--z-threshold", "1000"])
     output = capsys.readouterr().out
     assert "verdict: not_watermarked" in output
